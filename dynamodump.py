@@ -46,6 +46,7 @@ AWS_SLEEP_INTERVAL = 10  # seconds
 LOCAL_SLEEP_INTERVAL = 1  # seconds
 BATCH_WRITE_SLEEP_INTERVAL = 0.15  # seconds
 MAX_BATCH_WRITE = 25  # DynamoDB limit
+MAX_PROVISION_RETRIES = 10
 SCHEMA_FILE = "schema.json"
 DATA_DIR = "data"
 MAX_RETRY = 6
@@ -460,7 +461,7 @@ def update_provisioned_throughput(conn, table_name, read_capacity, write_capacit
     """
     Update provisioned throughput on the table to provided values
     """
-
+    retry = 0
     logging.info("Updating " + table_name + " table read capacity to: " +
                  str(read_capacity) + ", write capacity to: " + str(write_capacity))
     while True:
@@ -470,6 +471,11 @@ def update_provisioned_throughput(conn, table_name, read_capacity, write_capacit
                                "WriteCapacityUnits": int(write_capacity)})
             break
         except boto.exception.JSONResponseError as e:
+            retry = retry + 1
+            if retry >= MAX_PROVISION_RETRIES:
+                logging.warning("Failed to restore read capacity to: " + str(read_capacity) + ", write capacity to: " +
+                                str(write_capacity) + " of " + table_name + "..")
+                break
             if e.body["__type"] == "com.amazonaws.dynamodb.v20120810#LimitExceededException":
                 logging.info("Limit exceeded, retrying updating throughput of " + table_name + "..")
                 time.sleep(sleep_interval)
@@ -606,7 +612,7 @@ def do_backup(dynamo, read_capacity, tableQueue=None, srcTable=None):
                         break
 
                 # revert back to original table read capacity if specified
-                if read_capacity is not None and read_capacity != original_read_capacity:
+                if not args.skipThroughputUpdate and read_capacity is not None and read_capacity != original_read_capacity:
                     update_provisioned_throughput(dynamo,
                                                   table_name,
                                                   original_read_capacity,
