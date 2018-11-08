@@ -5,3 +5,5 @@ COPY ./requirements.txt /mnt/dynamodump/requirements.txt
 COPY ./dynamodump.py /usr/local/bin/dynamodump
 
 RUN pip install -r /mnt/dynamodump/requirements.txt
+
+ENTRYPOINT ["/usr/local/bin/dynamodump"]
